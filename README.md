@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="WorkbenchStrip/pack.png" alt="WorkbenchStrip" width="96" height="96">
+</p>
+
 # WorkbenchStrip
 
 作業台のクラフトで、斧の右クリックと同じ「樹皮はぎ・錆び落とし・ロウ除去」ができる Minecraft Java Edition 用のデータパックです。
