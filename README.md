@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="WorkbenchStrip/pack.png" alt="WorkbenchStrip" width="96" height="96">
+  <img src="assets/icon.png" alt="WorkbenchStrip" width="96" height="96">
 </p>
 
 # WorkbenchStrip
