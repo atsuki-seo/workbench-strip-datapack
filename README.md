@@ -42,11 +42,13 @@ Python 3 の標準ライブラリだけで動きます。
 
 | コマンド | 内容 |
 |---|---|
-| `python3 tools/generate.py` | `WorkbenchStrip/`(データパック本体)と `dist/WorkbenchStrip.zip` を生成する |
-| `python3 tools/check_static.py` | オフラインの静的検証。`tests/expected_conversions.tsv` を正解として生成物を検証する(生成もやり直す) |
-| `python3 tools/check_vanilla.py` | 1.21.1 のバニラデータ([misode/mcmeta](https://github.com/misode/mcmeta) の固定コミット)と照合する。ネットワークが必要 |
+| `python3 tools/generate.py --target mc1.21.1` | `build/mc1.21.1/WorkbenchStrip/`(データパック本体)と `dist/WorkbenchStrip.zip` を生成する |
+| `python3 tools/check_static.py --target mc1.21.1` | オフラインの静的検証。`tests/mc1.21.1/expected_conversions.tsv` を正解として生成物を検証する(生成もやり直す) |
+| `python3 tools/check_vanilla.py --target mc1.21.1` | 1.21.1 のバニラデータ([misode/mcmeta](https://github.com/misode/mcmeta) の固定コミット)と照合する。ネットワークが必要 |
 
-検証スクリプトは、すべて合格すると終了コード0で終わります。設計と検証の詳細は [plans/workbench-strip-plan.md](plans/workbench-strip-plan.md) にあります。
+3つとも `--target <ターゲットID>` の代わりに `--all` を指定すると、`targets/` にある全ターゲットを対象にします。対応する Minecraft のバージョンは、`targets/<ターゲットID>.json` に書きます。
+
+検証スクリプトは、すべて合格すると終了コード0で終わります。設計と検証の詳細は [plans/workbench-strip-plan.md](plans/workbench-strip-plan.md)、複数バージョンの開発体制は [plans/multi-version-design.md](plans/multi-version-design.md) にあります。
 
 ## ライセンス
 

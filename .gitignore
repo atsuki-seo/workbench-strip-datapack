@@ -1,6 +1,7 @@
 # 生成物(tools/generate.py で再生成できる。zip は GitHub Releases に添付する)
-/WorkbenchStrip/
+/build/
 /dist/
+/.fetch-cache/
 
 __pycache__/
 .DS_Store
