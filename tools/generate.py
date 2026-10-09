@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """WorkbenchStrip データパックを生成する。
 
-- WorkbenchStrip/ を毎回消してから、pack.mcmeta・pack.png(アイコン)・レシピ84件・解放用の進捗84件を書き出す
+- WorkbenchStrip/ を毎回消してから、pack.mcmeta・pack.png(アイコン)・LICENSE・README.md・レシピ84件・解放用の進捗84件を書き出す
 - dist/WorkbenchStrip.zip を、zip の直下に pack.mcmeta と data/ を置く形で作る
 
 データパックの表示名は、フォルダ名・zip のファイル名(WorkbenchStrip)で表す。
@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PACK_NAME = "WorkbenchStrip"
 PACK_DIR = ROOT / PACK_NAME
 DIST_ZIP = ROOT / "dist" / f"{PACK_NAME}.zip"
+# 配布物に同梱する、リポジトリ直下のファイル(MIT ライセンスの条件に合わせて LICENSE を含める)
+BUNDLED_FILES = ["LICENSE", "README.md"]
 
 NAMESPACE = "workbench_strip"
 PACK_FORMAT = 48
@@ -142,6 +144,8 @@ def generate_pack() -> list[str]:
         {"pack": {"pack_format": PACK_FORMAT, "description": DESCRIPTION}},
     )
     (PACK_DIR / "pack.png").write_bytes(icon_png())
+    for name in BUNDLED_FILES:
+        shutil.copyfile(ROOT / name, PACK_DIR / name)
 
     data_dir = PACK_DIR / "data" / NAMESPACE
     recipe_ids = []

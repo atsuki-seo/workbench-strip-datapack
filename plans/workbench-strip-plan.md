@@ -97,6 +97,7 @@ workbench-strip-datapack/
 ├─ WorkbenchStrip/                      # 生成物(データパック本体)
 │  ├─ pack.mcmeta
 │  ├─ pack.png
+│  ├─ LICENSE / README.md               # リポジトリ直下からコピーして同梱
 │  └─ data/workbench_strip/
 │     ├─ advancement/recipes/{strip,scrape,unwax}/*.json
 │     └─ recipe/{strip,scrape,unwax}/*.json
@@ -138,7 +139,7 @@ workbench-strip-datapack/
 | ID | ゴール | 合格基準 |
 |---|---|---|
 | G-S1 | `pack.mcmeta` が正しい | JSON として読める。`pack.pack_format == 48`。`pack.description` が空でない文字列で、1行目が `WorkbenchStrip` |
-| G-S2 | ディレクトリ構成が正しい | `WorkbenchStrip/` 配下のファイルが、`pack.mcmeta`、`pack.png`、`data/workbench_strip/advancement/recipes/{strip,scrape,unwax}/*.json`、`data/workbench_strip/recipe/{strip,scrape,unwax}/*.json` だけ。`data/workbench_strip/` 直下に `recipes/`・`advancements/`(複数形)がない |
+| G-S2 | ディレクトリ構成が正しい | `WorkbenchStrip/` 配下のファイルが、`pack.mcmeta`、`pack.png`、`LICENSE`、`README.md`、`data/workbench_strip/advancement/recipes/{strip,scrape,unwax}/*.json`、`data/workbench_strip/recipe/{strip,scrape,unwax}/*.json` だけ。`data/workbench_strip/` 直下に `recipes/`・`advancements/`(複数形)がない |
 | G-S3 | レシピの件数 | strip 21、scrape 27、unwax 36(合計84) |
 | G-S4 | レシピのスキーマ(1.21.1 の書式) | 全84件で、最上位のキーがちょうど `{type, category, ingredients, result}`。`type == "minecraft:crafting_shapeless"`、`category == "building"`。`ingredients` の各要素は**キーが `item` だけの dict**(文字列や `tag` は FAIL)。`result` のキーがちょうど `{id, count}` |
 | G-S5 | 個数の整合 | 各レシピの `ingredients` がすべて同じ `item` で、`len(ingredients) == result.count` で、値は1か2 |
@@ -148,6 +149,7 @@ workbench-strip-datapack/
 | G-S9 | 名前空間 | 材料と結果のIDがすべて `minecraft:` で始まる。`pack.png` 以外のファイルがすべて UTF-8 の JSON として読める |
 | G-S10 | 生成が再現できる | `generate.py` を2回実行し、`WorkbenchStrip/` 配下の全ファイルと zip の SHA-256 が2回とも同じ |
 | G-S11 | アイコン | `pack.png` が PNG で、128x128 |
+| G-S13 | 同梱ファイル | `WorkbenchStrip/LICENSE`・`WorkbenchStrip/README.md` が、リポジトリ直下の同名ファイルと完全に一致する(zip にも入る。G-Z2) |
 | G-S12 | 正式名 | `WorkbenchStrip/` と `dist/WorkbenchStrip.zip` があり、旧名の `workbench_strip/`・`dist/workbench_strip.zip` が残っていない |
 
 ### 4.3 L1: zip の検証(`check_static.py` に含める)

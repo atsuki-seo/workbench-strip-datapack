@@ -28,6 +28,8 @@ EXPECTED_COUNTS = {"strip": 21, "scrape": 27, "unwax": 36}
 TOTAL = 84
 ADVANCEMENT_PREFIX = f"data/{NAMESPACE}/advancement/recipes/"
 ICON_REL = "pack.png"
+# リポジトリ直下からパックのルートに同梱するファイル
+BUNDLED_FILES = ("LICENSE", "README.md")
 ICON_SIZE = 128
 RECIPE_PREFIX = f"data/{NAMESPACE}/recipe/"
 
@@ -115,7 +117,7 @@ def check_pack(files: dict[str, bytes], expected: list[tuple[str, str, str, int]
     parsed: dict[str, object] = {}
     parse_problems = []
     for rel, data in files.items():
-        if rel == ICON_REL:
+        if rel == ICON_REL or rel in BUNDLED_FILES:
             continue
         try:
             parsed[rel] = json.loads(data.decode("utf-8"))
@@ -141,14 +143,14 @@ def check_pack(files: dict[str, bytes], expected: list[tuple[str, str, str, int]
     # G-S2
     problems = []
     for rel in files:
-        if rel in ("pack.mcmeta", ICON_REL):
+        if rel in ("pack.mcmeta", ICON_REL, *BUNDLED_FILES):
             continue
         parts = rel.split("/")
         is_recipe = rel.startswith(RECIPE_PREFIX) and len(parts) == 5 and parts[3] in KINDS
         is_advancement = rel.startswith(ADVANCEMENT_PREFIX) and len(parts) == 6 and parts[4] in KINDS
         if not ((is_recipe or is_advancement) and rel.endswith(".json")):
             problems.append(f"想定外のファイル: {rel}")
-    for required in ("pack.mcmeta", ICON_REL):
+    for required in ("pack.mcmeta", ICON_REL, *BUNDLED_FILES):
         if required not in files:
             problems.append(f"必須ファイルがない: {required}")
     # 1.21 からは data/<名前空間>/ 直下のフォルダ名が単数形(advancement/recipes/ のような下位のフォルダは対象外)
@@ -304,6 +306,16 @@ def check_pack(files: dict[str, bytes], expected: list[tuple[str, str, str, int]
     stale = [p.relative_to(ROOT).as_posix() for p in (ROOT / "workbench_strip", ROOT / "dist" / "workbench_strip.zip") if p.exists()]
     problems += [f"旧名の生成物が残っている: {p}" for p in stale]
     report("G-S12", problems)
+
+    # G-S13
+    problems = []
+    for name in BUNDLED_FILES:
+        source = ROOT / name
+        if not source.is_file():
+            problems.append(f"リポジトリ直下に {name} がない")
+        elif files.get(name) != source.read_bytes():
+            problems.append(f"{PACK_NAME}/{name} がリポジトリ直下の {name} と一致しない")
+    report("G-S13", problems)
 
 
 def check_zip(files: dict[str, bytes]) -> None:
