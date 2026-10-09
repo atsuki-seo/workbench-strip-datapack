@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """L0・L1: 期待値表と生成物のオフライン静的検証。
 
-tests/expected_conversions.tsv を正解として、WorkbenchStrip/ と dist/WorkbenchStrip.zip を検証する。
+tests/<ターゲットID>/expected_conversions.tsv を正解として、build/<ターゲットID>/WorkbenchStrip/ と dist/ の zip を検証する。
+使い方: check_static.py --target <ターゲットID> | --all
 各ゴールについて `PASS <ID>` / `FAIL <ID>: <理由>` を1行ずつ出力し、FAIL が1つでもあれば終了コード1で終わる。
 標準ライブラリだけを使う。
 """
 
+import argparse
 import hashlib
 import json
 import struct
@@ -15,11 +17,8 @@ import zipfile
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-PACK_NAME = "WorkbenchStrip"
-PACK_DIR = ROOT / PACK_NAME
-DIST_ZIP = ROOT / "dist" / f"{PACK_NAME}.zip"
-EXPECTED_TSV = ROOT / "tests" / "expected_conversions.tsv"
+from targets import PACK_NAME, ROOT, Target, add_target_args, resolve_targets
+
 GENERATE = ROOT / "tools" / "generate.py"
 
 NAMESPACE = "workbench_strip"
@@ -44,6 +43,7 @@ EXPECTED_DOUBLE_SOURCES = (
 JUNK_NAMES = (".DS_Store", "Thumbs.db", "desktop.ini")
 
 failures = 0
+current_label = ""
 
 
 def report(goal_id: str, problems: list[str]) -> None:
@@ -53,39 +53,40 @@ def report(goal_id: str, problems: list[str]) -> None:
         shown = "; ".join(problems[:5])
         if len(problems) > 5:
             shown += f"; ...(他 {len(problems) - 5} 件)"
-        print(f"FAIL {goal_id}: {shown}")
+        print(f"FAIL {current_label}{goal_id}: {shown}")
     else:
-        print(f"PASS {goal_id}")
+        print(f"PASS {current_label}{goal_id}")
 
 
-def load_expected() -> list[tuple[str, str, str, int]]:
+def load_expected(target: Target) -> list[tuple[str, str, str, int]]:
     rows = []
-    for lineno, line in enumerate(EXPECTED_TSV.read_text(encoding="utf-8").splitlines(), 1):
+    tsv = target.expected_tsv
+    for lineno, line in enumerate(tsv.read_text(encoding="utf-8").splitlines(), 1):
         if not line:
             continue
         cols = line.split("\t")
         if len(cols) != 4:
-            raise ValueError(f"{EXPECTED_TSV.name}:{lineno}: 列数が4ではない")
+            raise ValueError(f"{tsv.relative_to(ROOT)}:{lineno}: 列数が4ではない")
         kind, src, dst, n = cols
         rows.append((kind, src, dst, int(n)))
     return rows
 
 
-def pack_files() -> dict[str, bytes]:
-    """WorkbenchStrip/ 配下の全ファイル(パック内の相対パス → 内容)。"""
+def pack_files(target: Target) -> dict[str, bytes]:
+    """build/<ターゲットID>/WorkbenchStrip/ 配下の全ファイル(パック内の相対パス → 内容)。"""
     return {
-        p.relative_to(PACK_DIR).as_posix(): p.read_bytes()
-        for p in sorted(PACK_DIR.rglob("*"))
+        p.relative_to(target.pack_dir).as_posix(): p.read_bytes()
+        for p in sorted(target.pack_dir.rglob("*"))
         if p.is_file()
     }
 
 
-def tree_digest() -> dict[str, str]:
-    return {rel: hashlib.sha256(data).hexdigest() for rel, data in pack_files().items()}
+def tree_digest(target: Target) -> dict[str, str]:
+    return {rel: hashlib.sha256(data).hexdigest() for rel, data in pack_files(target).items()}
 
 
-def run_generate() -> None:
-    subprocess.run([sys.executable, str(GENERATE)], check=True, stdout=subprocess.DEVNULL)
+def run_generate(target: Target) -> None:
+    subprocess.run([sys.executable, str(GENERATE), "--target", target.id], check=True, stdout=subprocess.DEVNULL)
 
 
 def check_expected(expected: list[tuple[str, str, str, int]]) -> None:
@@ -112,7 +113,7 @@ def check_expected(expected: list[tuple[str, str, str, int]]) -> None:
     report("G-E3", [f"重複した from: {dup}"] if dup else [])
 
 
-def check_pack(files: dict[str, bytes], expected: list[tuple[str, str, str, int]]) -> None:
+def check_pack(target: Target, files: dict[str, bytes], expected: list[tuple[str, str, str, int]]) -> None:
     # 読み込み(G-S9 の UTF-8 / JSON 判定を兼ねる)
     parsed: dict[str, object] = {}
     parse_problems = []
@@ -131,8 +132,8 @@ def check_pack(files: dict[str, bytes], expected: list[tuple[str, str, str, int]
         problems.append("pack.mcmeta がない、または pack オブジェクトがない")
     else:
         pack = mcmeta["pack"]
-        if pack.get("pack_format") != 48 or isinstance(pack.get("pack_format"), bool):
-            problems.append(f"pack_format が {pack.get('pack_format')!r}")
+        if pack.get("pack_format") != target.pack_format or isinstance(pack.get("pack_format"), bool):
+            problems.append(f"pack_format が {pack.get('pack_format')!r}(期待 {target.pack_format})")
         desc = pack.get("description")
         if not isinstance(desc, str) or not desc:
             problems.append(f"description が空でない文字列ではない: {desc!r}")
@@ -154,8 +155,8 @@ def check_pack(files: dict[str, bytes], expected: list[tuple[str, str, str, int]
         if required not in files:
             problems.append(f"必須ファイルがない: {required}")
     # 1.21 からは data/<名前空間>/ 直下のフォルダ名が単数形(advancement/recipes/ のような下位のフォルダは対象外)
-    plural = [p for p in (PACK_DIR / "data").glob("*/*") if p.is_dir() and p.name in ("recipes", "advancements")]
-    problems += [f"複数形のフォルダがある: {p.relative_to(PACK_DIR)}" for p in plural]
+    plural = [p for p in (target.pack_dir / "data").glob("*/*") if p.is_dir() and p.name in ("recipes", "advancements")]
+    problems += [f"複数形のフォルダがある: {p.relative_to(target.pack_dir)}" for p in plural]
     report("G-S2", problems)
 
     recipes = {rel: obj for rel, obj in parsed.items() if rel.startswith(RECIPE_PREFIX)}
@@ -299,12 +300,13 @@ def check_pack(files: dict[str, bytes], expected: list[tuple[str, str, str, int]
 
     # G-S12
     problems = []
-    if not PACK_DIR.is_dir():
-        problems.append(f"{PACK_NAME}/ がない")
-    if not DIST_ZIP.is_file():
-        problems.append(f"dist/{PACK_NAME}.zip がない")
-    stale = [p.relative_to(ROOT).as_posix() for p in (ROOT / "workbench_strip", ROOT / "dist" / "workbench_strip.zip") if p.exists()]
-    problems += [f"旧名の生成物が残っている: {p}" for p in stale]
+    if not target.pack_dir.is_dir():
+        problems.append(f"{target.pack_dir.relative_to(ROOT)}/ がない")
+    if not target.zip_path.is_file():
+        problems.append(f"{target.zip_path.relative_to(ROOT)} がない")
+    # 旧名・旧配置(build/ に移す前はリポジトリ直下の WorkbenchStrip/)の生成物
+    stale = [p.relative_to(ROOT).as_posix() for p in (ROOT / "workbench_strip", ROOT / "dist" / "workbench_strip.zip", ROOT / PACK_NAME) if p.exists()]
+    problems += [f"旧名・旧配置の生成物が残っている: {p}" for p in stale]
     report("G-S12", problems)
 
     # G-S13
@@ -314,17 +316,18 @@ def check_pack(files: dict[str, bytes], expected: list[tuple[str, str, str, int]
         if not source.is_file():
             problems.append(f"リポジトリ直下に {name} がない")
         elif files.get(name) != source.read_bytes():
-            problems.append(f"{PACK_NAME}/{name} がリポジトリ直下の {name} と一致しない")
+            problems.append(f"{target.pack_dir.relative_to(ROOT)}/{name} がリポジトリ直下の {name} と一致しない")
     report("G-S13", problems)
 
 
-def check_zip(files: dict[str, bytes]) -> None:
-    if not DIST_ZIP.is_file():
+def check_zip(target: Target, files: dict[str, bytes]) -> None:
+    zip_path = target.zip_path
+    if not zip_path.is_file():
         for goal in ("G-Z1", "G-Z2", "G-Z3"):
-            report(goal, [f"{DIST_ZIP.relative_to(ROOT)} がない"])
+            report(goal, [f"{zip_path.relative_to(ROOT)} がない"])
         return
 
-    with zipfile.ZipFile(DIST_ZIP) as zf:
+    with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
         contents = {n: zf.read(n) for n in names if not n.endswith("/")}
 
@@ -345,34 +348,45 @@ def check_zip(files: dict[str, bytes]) -> None:
     report("G-Z3", [f"余計なファイル: {junk}"] if junk else [])
 
 
-def main() -> int:
+def check_target(target: Target) -> None:
+    global current_label
+    current_label = f"[{target.id}] "
+
     try:
-        expected = load_expected()
+        expected = load_expected(target)
     except (OSError, ValueError) as e:
-        print(f"FAIL G-E1: 期待値表を読めない: {e}")
-        return 1
+        report("G-E1", [f"期待値表を読めない: {e}"])
+        return
     check_expected(expected)
 
     # G-S10: 2回生成して、全ファイルの SHA-256 一覧が同じことを確認する。以降のチェックはこの生成物を対象にする
     def zip_digest() -> str | None:
-        return hashlib.sha256(DIST_ZIP.read_bytes()).hexdigest() if DIST_ZIP.is_file() else None
+        return hashlib.sha256(target.zip_path.read_bytes()).hexdigest() if target.zip_path.is_file() else None
 
-    run_generate()
-    first, first_zip = tree_digest(), zip_digest()
-    run_generate()
-    second, second_zip = tree_digest(), zip_digest()
+    run_generate(target)
+    first, first_zip = tree_digest(target), zip_digest()
+    run_generate(target)
+    second, second_zip = tree_digest(target), zip_digest()
     problems = [f"内容が変わった: {rel}" for rel in sorted(set(first) | set(second)) if first.get(rel) != second.get(rel)]
+    zip_rel = target.zip_path.relative_to(ROOT)
     if not first:
-        problems.append(f"{PACK_NAME}/ が生成されていない")
+        problems.append(f"{target.pack_dir.relative_to(ROOT)}/ が生成されていない")
     if first_zip is None:
-        problems.append(f"dist/{PACK_NAME}.zip が生成されていない")
+        problems.append(f"{zip_rel} が生成されていない")
     elif first_zip != second_zip:
-        problems.append(f"dist/{PACK_NAME}.zip の内容が変わった")
+        problems.append(f"{zip_rel} の内容が変わった")
     report("G-S10", problems)
 
-    files = pack_files()
-    check_pack(files, expected)
-    check_zip(files)
+    files = pack_files(target)
+    check_pack(target, files, expected)
+    check_zip(target, files)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    add_target_args(parser)
+    for target in resolve_targets(parser.parse_args()):
+        check_target(target)
 
     print(f"{'NG' if failures else 'OK'}: FAIL {failures} 件")
     return 1 if failures else 0
